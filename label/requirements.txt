@@ -1,0 +1,4 @@
+bleak>=0.20
+Pillow>=9.0
+numpy<2.0
+opencv-python<5.0
