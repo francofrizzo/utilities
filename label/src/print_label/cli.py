@@ -1,41 +1,36 @@
-#!/usr/bin/env python3
 """
-Standalone thermal printer label maker.
-Usage: label [OPTIONS] TEXT
+Thermal printer label maker.
+Usage: print-label [OPTIONS] TEXT
 
 Examples:
-  label "PANKO"
-  label --small "Ingredient"
-  label --large "WARNING"
-  label "Main Label" --subtext "Subtitle here"
+  print-label "PANKO"
+  print-label --small "Ingredient"
+  print-label --large "WARNING"
+  print-label "Main Label" --subtext "Subtitle here"
 """
 
 import argparse
 import asyncio
-import sys
 import tempfile
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
 
-# Import catprinter for the working BLE protocol
-SCRIPT_DIR = Path(__file__).parent.parent
-sys.path.insert(0, str(SCRIPT_DIR / 'lib'))
-from catprinter.ble import run_ble
-from catprinter.cmds import cmds_print_img
-from catprinter.img import read_img
+from print_label.catprinter.ble import run_ble
+from print_label.catprinter.cmds import cmds_print_img
+from print_label.catprinter.img import read_img
 
 
 # ========== Constants ==========
 
 PRINTER_WIDTH = 384  # pixels
 
-# Font configuration - try to find Helvetica variants, fallback to system defaults
+
 def find_font():
     """Find the best available font on the system."""
     candidates = [
         # macOS
-        ("/System/Library/Fonts/HelveticaNeue.ttc", 10, 0),  # (path, medium_idx, regular_idx)
+        ("/System/Library/Fonts/HelveticaNeue.ttc", 10, 0),
         ("/System/Library/Fonts/Helvetica.ttc", 1, 0),
         # Linux
         ("/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf", 0, 0),
@@ -44,46 +39,39 @@ def find_font():
         ("C:/Windows/Fonts/arialbd.ttf", 0, 0),
         ("C:/Windows/Fonts/arial.ttf", 0, 0),
     ]
-
     for path, medium_idx, regular_idx in candidates:
         if Path(path).exists():
             return path, medium_idx, regular_idx
-
-    # Last resort: try to use PIL's default
     raise RuntimeError("No suitable font found. Please install Helvetica, Liberation Sans, or Arial.")
+
 
 FONT_PATH, FONT_INDEX_MEDIUM, FONT_INDEX_REGULAR = find_font()
 
-# Size presets
 FONT_SIZE_SMALL = 48
 FONT_SIZE_NORMAL = 72
 FONT_SIZE_LARGE = 96
 SUBTEXT_SIZE = 32
 
-PADDING = 20  # vertical padding
-SUPERSAMPLE = 2  # render at 2x for quality
+PADDING = 20
+SUPERSAMPLE = 2
 
 
 # ========== Image Generation ==========
 
 def create_label(text, subtext=None, size="normal"):
     """Create a label image with text and optional subtext."""
-    # Determine font sizes
     size_map = {"small": FONT_SIZE_SMALL, "normal": FONT_SIZE_NORMAL, "large": FONT_SIZE_LARGE}
     main_size = size_map.get(size, FONT_SIZE_NORMAL) * SUPERSAMPLE
     sub_size = SUBTEXT_SIZE * SUPERSAMPLE
     padding = PADDING * SUPERSAMPLE
     width = PRINTER_WIDTH * SUPERSAMPLE
 
-    # Load fonts
     main_font = ImageFont.truetype(FONT_PATH, size=main_size, index=FONT_INDEX_MEDIUM)
 
-    # Calculate main text dimensions
     main_bbox = main_font.getbbox(text)
     main_width = main_bbox[2] - main_bbox[0]
     main_height = main_bbox[3] - main_bbox[1]
 
-    # Calculate total height
     total_height = main_height + padding * 2
 
     if subtext:
@@ -92,25 +80,20 @@ def create_label(text, subtext=None, size="normal"):
         sub_height = sub_bbox[3] - sub_bbox[1]
         total_height += sub_height + padding // 2
 
-    # Create image (grayscale for antialiasing)
     img = Image.new("L", (width, total_height), color=255)
     draw = ImageDraw.Draw(img)
 
-    # Draw main text (centered)
     main_x = (width - main_width) // 2 - main_bbox[0]
     main_y = padding - main_bbox[1]
     draw.text((main_x, main_y), text, font=main_font, fill=0)
 
-    # Draw subtext if provided (centered, below main text)
     if subtext:
         sub_width = sub_bbox[2] - sub_bbox[0]
         sub_x = (width - sub_width) // 2 - sub_bbox[0]
         sub_y = main_y + main_height + padding // 2 - sub_bbox[1]
         draw.text((sub_x, sub_y), subtext, font=sub_font, fill=0)
 
-    # Downsample to final resolution
     img = img.resize((PRINTER_WIDTH, total_height // SUPERSAMPLE), Image.LANCZOS)
-
     return img
 
 
@@ -120,10 +103,10 @@ def main():
     parser = argparse.ArgumentParser(
         description="Print labels on thermal printer",
         epilog="Examples:\n"
-               "  label \"PANKO\"\n"
-               "  label --small \"Ingredient\"\n"
-               "  label --large \"WARNING\"\n"
-               "  label \"Main Label\" --subtext \"Subtitle here\"",
+               "  print-label \"PANKO\"\n"
+               "  print-label --small \"Ingredient\"\n"
+               "  print-label --large \"WARNING\"\n"
+               "  print-label \"Main Label\" --subtext \"Subtitle here\"",
         formatter_class=argparse.RawDescriptionHelpFormatter
     )
 
@@ -144,41 +127,31 @@ def main():
 
     args = parser.parse_args()
 
-    # Set default size
     if args.size is None:
         args.size = "normal"
 
-    # Generate label
     img = create_label(args.text, subtext=args.subtext, size=args.size)
 
-    # Save if requested
     if args.save:
         img.save(args.save)
         print(f"Saved to {args.save}")
 
-    # Preview if requested
     if args.preview:
         img.show()
         return
 
-    # Don't print if only saving
     if args.save and not args.device:
         return
 
-    # Save to temp file for catprinter to read
     with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp:
         tmp_path = tmp.name
         img.save(tmp_path)
 
     try:
-        # Use catprinter to read and print
         img_data = read_img(tmp_path, PRINTER_WIDTH, 'none')
         commands = cmds_print_img(img_data, energy=0xffff)
-
-        # Print via BLE
         asyncio.run(run_ble(commands, args.device))
     finally:
-        # Clean up temp file
         Path(tmp_path).unlink(missing_ok=True)
 
 

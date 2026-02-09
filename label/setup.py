@@ -2,13 +2,17 @@ from setuptools import setup, find_packages
 
 setup(
     name="print-label",
-    version="0.1.0",
+    version="0.2.0",
     description="Thermal printer label maker for Bluetooth cat printers",
     author="Franco Frizzo",
     license="MIT",
-    packages=find_packages(where="lib"),
-    package_dir={"": "lib"},
-    scripts=["bin/print-label"],
+    packages=find_packages(where="src"),
+    package_dir={"": "src"},
+    entry_points={
+        "console_scripts": [
+            "print-label=print_label.cli:main",
+        ],
+    },
     install_requires=[
         "bleak>=0.20",
         "Pillow>=9.0",

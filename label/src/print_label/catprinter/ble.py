@@ -10,7 +10,7 @@ try:
     from bleak.backends.bluezdbus.client import BleakClientBlueZDBus
 except ImportError:
     BleakClientBlueZDBus = None
-from catprinter import logger
+from print_label.catprinter import logger
 
 # For some reason, bleak reports the 0xaf30 service on my macOS, while it reports
 # 0xae30 (which I believe is correct) on my Raspberry Pi. This hacky workaround
