@@ -24,10 +24,16 @@ echo "    $SHA"
 
 echo "==> Updating homebrew-tap formula"
 FORMULA="$TAP_DIR/Formula/print-label.rb"
-# Update tarball URL
-sed -i '' "s|url \"https://github.com/$REPO/archive/.*\"|url \"https://github.com/$REPO/archive/refs/tags/$TAG.tar.gz\"|" "$FORMULA"
-# Update only the top-level sha256 (line after the url line), not the bleak resource sha256
-sed -i '' "/url \"https:\/\/github.com\/$REPO\/archive/{ n; s|sha256 \".*\"|sha256 \"$SHA\"|; }" "$FORMULA"
+# Update tarball URL and sha256 (only the top-level one, not the bleak resource)
+ruby -i -pe '
+  if $_ =~ /url "https:\/\/github.com\/francofrizzo\/utilities\/archive/
+    $_ = "  url \"https://github.com/'"$REPO"'/archive/refs/tags/'"$TAG"'.tar.gz\"\n"
+    $update_next_sha = true
+  elsif $update_next_sha && $_ =~ /sha256/
+    $_ = "  sha256 \"'"$SHA"'\"\n"
+    $update_next_sha = false
+  end
+' "$FORMULA"
 
 echo "==> Pushing homebrew-tap"
 git -C "$TAP_DIR" add Formula/print-label.rb
