@@ -1,4 +1,4 @@
-# label
+# print-label
 
 Thermal printer label maker for Bluetooth cat printers. Create beautiful labels with Helvetica Neue font.
 
@@ -15,7 +15,7 @@ Thermal printer label maker for Bluetooth cat printers. Create beautiful labels 
 ### Homebrew
 
 ```bash
-brew install francofrizzo/tap/label
+brew install francofrizzo/tap/print-label
 ```
 
 ### Manual
@@ -23,8 +23,7 @@ brew install francofrizzo/tap/label
 ```bash
 git clone https://github.com/francofrizzo/utilities.git
 cd utilities/label
-pip install -r requirements.txt
-ln -s "$PWD/bin/label" /usr/local/bin/label
+pip install .
 ```
 
 ### Dependencies
@@ -40,33 +39,33 @@ ln -s "$PWD/bin/label" /usr/local/bin/label
 
 ```bash
 # Normal size (72pt)
-label "PANKO"
+print-label "PANKO"
 
 # Small font (48pt)
-label --small "Ingredient"
+print-label --small "Ingredient"
 
 # Large font (96pt)
-label --large "WARNING"
+print-label --large "WARNING"
 ```
 
 ### With subtitles
 
 ```bash
-label "BREAD CRUMBS" --subtext "Japanese Style"
-label "OLIVE OIL" -s "Extra Virgin"
+print-label "BREAD CRUMBS" --subtext "Japanese Style"
+print-label "OLIVE OIL" -s "Extra Virgin"
 ```
 
 ### Preview and save
 
 ```bash
 # Preview without printing
-label "TEST" --preview
+print-label "TEST" --preview
 
 # Save to file
-label "PANKO" --save panko.png
+print-label "PANKO" --save panko.png
 
 # Both
-label "LABEL" --preview --save label.png
+print-label "LABEL" --preview --save label.png
 ```
 
 ### Options

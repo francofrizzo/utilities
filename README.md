@@ -4,18 +4,18 @@ A collection of personal command-line utilities.
 
 ## Tools
 
-### [label](./label/)
+### [print-label](./label/)
 
 Thermal printer label maker for Bluetooth cat printers. Print beautiful labels with Helvetica Neue font.
 
 ```bash
-label "PANKO"
-label "BREAD CRUMBS" --subtext "Japanese Style"
+print-label "PANKO"
+print-label "BREAD CRUMBS" --subtext "Japanese Style"
 ```
 
 **Install:**
 ```bash
-brew install francofrizzo/tap/label
+brew install francofrizzo/tap/print-label
 ```
 
 ## License

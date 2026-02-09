@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="print-label",
-    version="0.2.0",
+    version="0.4.0",
     description="Thermal printer label maker for Bluetooth cat printers",
     author="Franco Frizzo",
     license="MIT",

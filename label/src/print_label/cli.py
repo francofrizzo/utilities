@@ -54,9 +54,51 @@ SUBTEXT_SIZE = 32
 
 PADDING = 20
 SUPERSAMPLE = 2
+MIN_FONT_SCALE = 0.75
 
 
 # ========== Image Generation ==========
+
+def _fit_text(text, font_path, font_index, font_size, max_width):
+    """Fit text within max_width: shrink font up to MIN_FONT_SCALE, then word-wrap."""
+    font = ImageFont.truetype(font_path, size=font_size, index=font_index)
+    text_width = font.getbbox(text)[2] - font.getbbox(text)[0]
+
+    if text_width <= max_width:
+        return font, [text]
+
+    # Shrink proportionally, clamped to MIN_FONT_SCALE
+    scale = max(MIN_FONT_SCALE, max_width / text_width)
+    shrunk_size = int(font_size * scale)
+    font = ImageFont.truetype(font_path, size=shrunk_size, index=font_index)
+    text_width = font.getbbox(text)[2] - font.getbbox(text)[0]
+
+    if text_width <= max_width:
+        return font, [text]
+
+    # Word-wrap at the shrunk font size
+    words = text.split()
+    lines = []
+    current = words[0]
+    for word in words[1:]:
+        test = current + " " + word
+        if font.getbbox(test)[2] - font.getbbox(test)[0] <= max_width:
+            current = test
+        else:
+            lines.append(current)
+            current = word
+    lines.append(current)
+
+    return font, lines
+
+
+def _text_block_height(font, lines):
+    """Total height of a block of text lines."""
+    ascent, descent = font.getmetrics()
+    line_h = ascent + descent
+    spacing = int(line_h * 0.15)
+    return line_h * len(lines) + spacing * max(0, len(lines) - 1), line_h, spacing
+
 
 def create_label(text, subtext=None, size="normal"):
     """Create a label image with text and optional subtext."""
@@ -65,33 +107,40 @@ def create_label(text, subtext=None, size="normal"):
     sub_size = SUBTEXT_SIZE * SUPERSAMPLE
     padding = PADDING * SUPERSAMPLE
     width = PRINTER_WIDTH * SUPERSAMPLE
+    max_text_width = width - 2 * padding
 
-    main_font = ImageFont.truetype(FONT_PATH, size=main_size, index=FONT_INDEX_MEDIUM)
+    main_font, main_lines = _fit_text(
+        text, FONT_PATH, FONT_INDEX_MEDIUM, main_size, max_text_width
+    )
+    main_block_h, main_line_h, main_spacing = _text_block_height(main_font, main_lines)
 
-    main_bbox = main_font.getbbox(text)
-    main_width = main_bbox[2] - main_bbox[0]
-    main_height = main_bbox[3] - main_bbox[1]
+    total_height = main_block_h + padding * 2
 
-    total_height = main_height + padding * 2
-
+    sub_font = sub_lines = None
     if subtext:
-        sub_font = ImageFont.truetype(FONT_PATH, size=sub_size, index=FONT_INDEX_REGULAR)
-        sub_bbox = sub_font.getbbox(subtext)
-        sub_height = sub_bbox[3] - sub_bbox[1]
-        total_height += sub_height + padding // 2
+        sub_font, sub_lines = _fit_text(
+            subtext, FONT_PATH, FONT_INDEX_REGULAR, sub_size, max_text_width
+        )
+        sub_block_h, sub_line_h, sub_spacing = _text_block_height(sub_font, sub_lines)
+        total_height += sub_block_h + padding // 2
 
     img = Image.new("L", (width, total_height), color=255)
     draw = ImageDraw.Draw(img)
 
-    main_x = (width - main_width) // 2 - main_bbox[0]
-    main_y = padding - main_bbox[1]
-    draw.text((main_x, main_y), text, font=main_font, fill=0)
+    y = padding
+    for line in main_lines:
+        bbox = main_font.getbbox(line)
+        lw = bbox[2] - bbox[0]
+        draw.text(((width - lw) // 2 - bbox[0], y - bbox[1]), line, font=main_font, fill=0)
+        y += main_line_h + main_spacing
 
-    if subtext:
-        sub_width = sub_bbox[2] - sub_bbox[0]
-        sub_x = (width - sub_width) // 2 - sub_bbox[0]
-        sub_y = main_y + main_height + padding // 2 - sub_bbox[1]
-        draw.text((sub_x, sub_y), subtext, font=sub_font, fill=0)
+    if sub_lines:
+        y = padding + main_block_h + padding // 2
+        for line in sub_lines:
+            bbox = sub_font.getbbox(line)
+            lw = bbox[2] - bbox[0]
+            draw.text(((width - lw) // 2 - bbox[0], y - bbox[1]), line, font=sub_font, fill=0)
+            y += sub_line_h + sub_spacing
 
     img = img.resize((PRINTER_WIDTH, total_height // SUPERSAMPLE), Image.LANCZOS)
     return img

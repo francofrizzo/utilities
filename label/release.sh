@@ -23,16 +23,17 @@ SHA=$(curl -sL "https://github.com/$REPO/archive/refs/tags/$TAG.tar.gz" | shasum
 echo "    $SHA"
 
 echo "==> Updating homebrew-tap formula"
-sed -i '' \
-  -e "s|url \".*utilities.*\"|url \"https://github.com/$REPO/archive/refs/tags/$TAG.tar.gz\"|" \
-  -e "s|sha256 \".*\"|sha256 \"$SHA\"|" \
-  "$TAP_DIR/Formula/label.rb"
+FORMULA="$TAP_DIR/Formula/print-label.rb"
+# Update tarball URL
+sed -i '' "s|url \"https://github.com/$REPO/archive/.*\"|url \"https://github.com/$REPO/archive/refs/tags/$TAG.tar.gz\"|" "$FORMULA"
+# Update only the top-level sha256 (line after the url line), not the bleak resource sha256
+sed -i '' "/url \"https:\/\/github.com\/$REPO\/archive/{ n; s|sha256 \".*\"|sha256 \"$SHA\"|; }" "$FORMULA"
 
 echo "==> Pushing homebrew-tap"
-git -C "$TAP_DIR" add Formula/label.rb
-git -C "$TAP_DIR" commit -m "label $TAG"
+git -C "$TAP_DIR" add Formula/print-label.rb
+git -C "$TAP_DIR" commit -m "print-label $TAG"
 git -C "$TAP_DIR" push
 
 echo ""
-echo "Done! Released label $TAG"
-echo "Users can run: brew upgrade label"
+echo "Done! Released print-label $TAG"
+echo "Users can run: brew upgrade print-label"
