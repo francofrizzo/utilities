@@ -2,15 +2,19 @@
 Thermal printer label maker.
 Usage: print-label [OPTIONS] TEXT
 
+Font size is specified in units of 12pt (default: 6 = 72pt).
+
 Examples:
   print-label "PANKO"
   print-label --small "Ingredient"
   print-label --large "WARNING"
+  print-label --size 5 "Custom size"
   print-label "Main Label" --subtext "Subtitle here"
 """
 
 import argparse
 import asyncio
+import sys
 import tempfile
 from pathlib import Path
 
@@ -47,10 +51,11 @@ def find_font():
 
 FONT_PATH, FONT_INDEX_MEDIUM, FONT_INDEX_REGULAR = find_font()
 
-FONT_SIZE_SMALL = 48
-FONT_SIZE_NORMAL = 72
-FONT_SIZE_LARGE = 96
-SUBTEXT_SIZE = 32
+SCALE_UNIT = 12  # 1 size unit = 12pt
+SIZE_SMALL = 4
+SIZE_NORMAL = 6
+SIZE_LARGE = 8
+SUBTEXT_SIZE = 36  # pt (internal, not user-facing)
 
 PADDING = 20
 SUPERSAMPLE = 2
@@ -89,6 +94,12 @@ def _fit_text(text, font_path, font_index, font_size, max_width):
             current = word
     lines.append(current)
 
+    # Warn about lines that overflow (e.g. a single word wider than the label)
+    for line in lines:
+        line_width = font.getbbox(line)[2] - font.getbbox(line)[0]
+        if line_width > max_width:
+            print(f"Warning: \"{line}\" overflows the label width and will be clipped", file=sys.stderr)
+
     return font, lines
 
 
@@ -100,10 +111,13 @@ def _text_block_height(font, lines):
     return line_h * len(lines) + spacing * max(0, len(lines) - 1), line_h, spacing
 
 
-def create_label(text, subtext=None, size="normal"):
-    """Create a label image with text and optional subtext."""
-    size_map = {"small": FONT_SIZE_SMALL, "normal": FONT_SIZE_NORMAL, "large": FONT_SIZE_LARGE}
-    main_size = size_map.get(size, FONT_SIZE_NORMAL) * SUPERSAMPLE
+def create_label(text, subtext=None, size=SIZE_NORMAL):
+    """Create a label image with text and optional subtext.
+
+    Args:
+        size: Label size in scale units (1 unit = 12pt). Default 6 (72pt).
+    """
+    main_size = int(size * SCALE_UNIT) * SUPERSAMPLE
     sub_size = SUBTEXT_SIZE * SUPERSAMPLE
     padding = PADDING * SUPERSAMPLE
     width = PRINTER_WIDTH * SUPERSAMPLE
@@ -151,10 +165,12 @@ def create_label(text, subtext=None, size="normal"):
 def main():
     parser = argparse.ArgumentParser(
         description="Print labels on thermal printer",
-        epilog="Examples:\n"
+        epilog="Size is in units of 12pt (default: 6 = 72pt)\n\n"
+               "Examples:\n"
                "  print-label \"PANKO\"\n"
                "  print-label --small \"Ingredient\"\n"
                "  print-label --large \"WARNING\"\n"
+               "  print-label --size 5 \"Custom size\"\n"
                "  print-label \"Main Label\" --subtext \"Subtitle here\"",
         formatter_class=argparse.RawDescriptionHelpFormatter
     )
@@ -163,10 +179,12 @@ def main():
     parser.add_argument("--subtext", "-s", help="Smaller subtitle text below main text")
 
     size_group = parser.add_mutually_exclusive_group()
-    size_group.add_argument("--small", action="store_const", const="small", dest="size",
-                           help=f"Use small font ({FONT_SIZE_SMALL}pt)")
-    size_group.add_argument("--large", action="store_const", const="large", dest="size",
-                           help=f"Use large font ({FONT_SIZE_LARGE}pt)")
+    size_group.add_argument("--small", action="store_const", const=SIZE_SMALL, dest="size",
+                           help=f"Use small font (size {SIZE_SMALL})")
+    size_group.add_argument("--large", action="store_const", const=SIZE_LARGE, dest="size",
+                           help=f"Use large font (size {SIZE_LARGE})")
+    size_group.add_argument("--size", type=float, dest="size", metavar="N",
+                           help=f"Custom size in units of {SCALE_UNIT}pt (default: {SIZE_NORMAL})")
 
     parser.add_argument("--preview", "-p", action="store_true",
                        help="Show preview instead of printing")
@@ -177,7 +195,7 @@ def main():
     args = parser.parse_args()
 
     if args.size is None:
-        args.size = "normal"
+        args.size = SIZE_NORMAL
 
     img = create_label(args.text, subtext=args.subtext, size=args.size)
 
