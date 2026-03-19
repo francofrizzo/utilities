@@ -33,7 +33,10 @@ CMD_LATTICE_START = bs([81, 120, -90, 0, 11, 0, -86, 85, 23,
 CMD_LATTICE_END = bs([81, 120, -90, 0, 11, 0, -86, 85,
                      23, 0, 0, 0, 0, 0, 0, 0, 23, 17, -1])
 
-CMD_SET_PAPER = bs([81, 120, -95, 0, 2, 0, 48, 0, -7, -1])
+def cmd_set_paper(amount=48):
+    b_arr = bs([81, 120, -95, 0, 2, 0, amount & 0xff, 0, 0, -1])
+    b_arr[8] = chk_sum(b_arr, 6, 2)
+    return bs(b_arr)
 
 CMD_PRINT_IMG = bs([81, 120, -66, 0, 1, 0, 0, 0, -1])
 
@@ -185,7 +188,7 @@ def cmd_print_row(img_row):
     return b_arr
 
 
-def cmds_print_img(img, energy: int = 0xffff):
+def cmds_print_img(img, energy: int = 0xffff, feed: int = 48):
     data = \
         CMD_GET_DEV_STATE + \
         CMD_SET_QUALITY_200_DPI + \
@@ -196,7 +199,7 @@ def cmds_print_img(img, energy: int = 0xffff):
         data += cmd_print_row(row)
     data += \
         cmd_feed_paper(0) + \
-        CMD_SET_PAPER + \
+        cmd_set_paper(feed) + \
         CMD_LATTICE_END + \
         CMD_GET_DEV_STATE
     return data

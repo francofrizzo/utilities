@@ -70,7 +70,7 @@ def _fit_text(text, font_path, font_index, font_size, max_width):
     text_width = font.getbbox(text)[2] - font.getbbox(text)[0]
 
     if text_width <= max_width:
-        return font, [text]
+        return font, [text], False
 
     # Shrink proportionally, clamped to MIN_FONT_SCALE
     scale = max(MIN_FONT_SCALE, max_width / text_width)
@@ -79,7 +79,7 @@ def _fit_text(text, font_path, font_index, font_size, max_width):
     text_width = font.getbbox(text)[2] - font.getbbox(text)[0]
 
     if text_width <= max_width:
-        return font, [text]
+        return font, [text], False
 
     # Word-wrap at the shrunk font size
     words = text.split()
@@ -94,13 +94,15 @@ def _fit_text(text, font_path, font_index, font_size, max_width):
             current = word
     lines.append(current)
 
-    # Warn about lines that overflow (e.g. a single word wider than the label)
+    # Check for lines that overflow (e.g. a single word wider than the label)
+    overflow = False
     for line in lines:
         line_width = font.getbbox(line)[2] - font.getbbox(line)[0]
         if line_width > max_width:
             print(f"Warning: \"{line}\" overflows the label width and will be clipped", file=sys.stderr)
+            overflow = True
 
-    return font, lines
+    return font, lines, overflow
 
 
 def _text_block_height(font, lines):
@@ -123,7 +125,7 @@ def create_label(text, subtext=None, size=SIZE_NORMAL):
     width = PRINTER_WIDTH * SUPERSAMPLE
     max_text_width = width - 2 * padding
 
-    main_font, main_lines = _fit_text(
+    main_font, main_lines, overflow = _fit_text(
         text, FONT_PATH, FONT_INDEX_MEDIUM, main_size, max_text_width
     )
     main_block_h, main_line_h, main_spacing = _text_block_height(main_font, main_lines)
@@ -132,9 +134,10 @@ def create_label(text, subtext=None, size=SIZE_NORMAL):
 
     sub_font = sub_lines = None
     if subtext:
-        sub_font, sub_lines = _fit_text(
+        sub_font, sub_lines, sub_overflow = _fit_text(
             subtext, FONT_PATH, FONT_INDEX_REGULAR, sub_size, max_text_width
         )
+        overflow = overflow or sub_overflow
         sub_block_h, sub_line_h, sub_spacing = _text_block_height(sub_font, sub_lines)
         total_height += sub_block_h + padding // 2
 
@@ -157,7 +160,7 @@ def create_label(text, subtext=None, size=SIZE_NORMAL):
             y += sub_line_h + sub_spacing
 
     img = img.resize((PRINTER_WIDTH, total_height // SUPERSAMPLE), Image.LANCZOS)
-    return img
+    return img, overflow
 
 
 # ========== CLI ==========
@@ -197,7 +200,7 @@ def main():
     if args.size is None:
         args.size = SIZE_NORMAL
 
-    img = create_label(args.text, subtext=args.subtext, size=args.size)
+    img, overflow = create_label(args.text, subtext=args.subtext, size=args.size)
 
     if args.save:
         img.save(args.save)
@@ -209,6 +212,12 @@ def main():
 
     if args.save and not args.device:
         return
+
+    if overflow:
+        answer = input("Text overflows the label. Print anyway? [y/N] ")
+        if answer.lower() != 'y':
+            print("Aborted.")
+            return
 
     with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp:
         tmp_path = tmp.name

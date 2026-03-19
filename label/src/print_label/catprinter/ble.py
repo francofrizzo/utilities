@@ -31,8 +31,8 @@ SCAN_TIMEOUT_S = 10
 # Wait time after sending each chunk of data through BLE.
 WAIT_AFTER_EACH_CHUNK_S = 0.02
 
-# Wait for printer done event timeout.
-WAIT_FOR_PRINTER_DONE_TIMEOUT = 30
+# Minimum wait for printer done event timeout.
+WAIT_FOR_PRINTER_DONE_TIMEOUT_BASE = 30
 
 
 async def scan(name: Optional[str], timeout: int):
@@ -120,9 +120,11 @@ async def run_ble(data, device: Optional[str]):
             await client.write_gatt_char(TX_CHARACTERISTIC_UUID, chunk)
             await asyncio.sleep(WAIT_AFTER_EACH_CHUNK_S)
 
+        # Scale timeout based on data size: ~1s per 1KB, minimum 30s
+        timeout = max(WAIT_FOR_PRINTER_DONE_TIMEOUT_BASE, len(data) // 1024)
         try:
             await asyncio.wait_for(
-                wait_for_printer_ready(event), timeout=WAIT_FOR_PRINTER_DONE_TIMEOUT
+                wait_for_printer_ready(event), timeout=timeout
             )
         except asyncio.TimeoutError:
             logger.error("🛑 Timed out while waiting for printer done event. Exiting.")

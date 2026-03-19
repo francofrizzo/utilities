@@ -11,6 +11,7 @@ setup(
     entry_points={
         "console_scripts": [
             "print-label=print_label.cli:main",
+            "print-image=print_label.cli_image:main",
         ],
     },
     install_requires=[
