@@ -10,6 +10,7 @@ Examples:
   print-label --large "WARNING"
   print-label --size 5 "Custom size"
   print-label "Main Label" --subtext "Subtitle here"
+  print-label "Line 1\\nLine 2"
 """
 
 import argparse
@@ -64,25 +65,15 @@ MIN_FONT_SCALE = 0.75
 
 # ========== Image Generation ==========
 
-def _fit_text(text, font_path, font_index, font_size, max_width):
-    """Fit text within max_width: shrink font up to MIN_FONT_SCALE, then word-wrap."""
-    font = ImageFont.truetype(font_path, size=font_size, index=font_index)
+def _fit_single_line(text, font, max_width):
+    """Fit a single logical line: word-wrap if needed. Returns (lines, overflow)."""
     text_width = font.getbbox(text)[2] - font.getbbox(text)[0]
-
     if text_width <= max_width:
-        return font, [text], False
+        return [text], False
 
-    # Shrink proportionally, clamped to MIN_FONT_SCALE
-    scale = max(MIN_FONT_SCALE, max_width / text_width)
-    shrunk_size = int(font_size * scale)
-    font = ImageFont.truetype(font_path, size=shrunk_size, index=font_index)
-    text_width = font.getbbox(text)[2] - font.getbbox(text)[0]
-
-    if text_width <= max_width:
-        return font, [text], False
-
-    # Word-wrap at the shrunk font size
     words = text.split()
+    if not words:
+        return [text], False
     lines = []
     current = words[0]
     for word in words[1:]:
@@ -94,7 +85,6 @@ def _fit_text(text, font_path, font_index, font_size, max_width):
             current = word
     lines.append(current)
 
-    # Check for lines that overflow (e.g. a single word wider than the label)
     overflow = False
     for line in lines:
         line_width = font.getbbox(line)[2] - font.getbbox(line)[0]
@@ -102,7 +92,38 @@ def _fit_text(text, font_path, font_index, font_size, max_width):
             print(f"Warning: \"{line}\" overflows the label width and will be clipped", file=sys.stderr)
             overflow = True
 
-    return font, lines, overflow
+    return lines, overflow
+
+
+def _fit_text(text, font_path, font_index, font_size, max_width):
+    """Fit text within max_width: shrink font up to MIN_FONT_SCALE, then word-wrap.
+
+    Supports explicit line breaks via \\n in the input text.
+    """
+    # Split on explicit line breaks
+    segments = text.split('\n')
+
+    font = ImageFont.truetype(font_path, size=font_size, index=font_index)
+
+    # Find the widest segment to determine shrink factor
+    widest = max(
+        font.getbbox(seg)[2] - font.getbbox(seg)[0] for seg in segments
+    )
+
+    if widest > max_width:
+        scale = max(MIN_FONT_SCALE, max_width / widest)
+        shrunk_size = int(font_size * scale)
+        font = ImageFont.truetype(font_path, size=shrunk_size, index=font_index)
+
+    # Word-wrap each segment independently
+    all_lines = []
+    overflow = False
+    for seg in segments:
+        seg_lines, seg_overflow = _fit_single_line(seg, font, max_width)
+        all_lines.extend(seg_lines)
+        overflow = overflow or seg_overflow
+
+    return font, all_lines, overflow
 
 
 def _text_block_height(font, lines):
@@ -174,7 +195,8 @@ def main():
                "  print-label --small \"Ingredient\"\n"
                "  print-label --large \"WARNING\"\n"
                "  print-label --size 5 \"Custom size\"\n"
-               "  print-label \"Main Label\" --subtext \"Subtitle here\"",
+               "  print-label \"Main Label\" --subtext \"Subtitle here\"\n"
+               "  print-label \"Line 1\\\\nLine 2\"",
         formatter_class=argparse.RawDescriptionHelpFormatter
     )
 
@@ -200,7 +222,10 @@ def main():
     if args.size is None:
         args.size = SIZE_NORMAL
 
-    img, overflow = create_label(args.text, subtext=args.subtext, size=args.size)
+    text = args.text.replace('\\n', '\n')
+    subtext = args.subtext.replace('\\n', '\n') if args.subtext else args.subtext
+
+    img, overflow = create_label(text, subtext=subtext, size=args.size)
 
     if args.save:
         img.save(args.save)
