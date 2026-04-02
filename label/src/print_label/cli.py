@@ -56,10 +56,10 @@ SCALE_UNIT = 12  # 1 size unit = 12pt
 SIZE_SMALL = 4
 SIZE_NORMAL = 6
 SIZE_LARGE = 8
-SUBTEXT_SIZE = 36  # pt (internal, not user-facing)
+SUBTEXT_RATIO = 0.75
 
 PADDING = 20
-SUPERSAMPLE = 2
+SUPERSAMPLE = 4
 MIN_FONT_SCALE = 0.75
 
 
@@ -141,7 +141,7 @@ def create_label(text, subtext=None, size=SIZE_NORMAL):
         size: Label size in scale units (1 unit = 12pt). Default 6 (72pt).
     """
     main_size = int(size * SCALE_UNIT) * SUPERSAMPLE
-    sub_size = SUBTEXT_SIZE * SUPERSAMPLE
+    sub_size = int(main_size * SUBTEXT_RATIO)
     padding = PADDING * SUPERSAMPLE
     width = PRINTER_WIDTH * SUPERSAMPLE
     max_text_width = width - 2 * padding
@@ -156,7 +156,7 @@ def create_label(text, subtext=None, size=SIZE_NORMAL):
     sub_font = sub_lines = None
     if subtext:
         sub_font, sub_lines, sub_overflow = _fit_text(
-            subtext, FONT_PATH, FONT_INDEX_REGULAR, sub_size, max_text_width
+            subtext, FONT_PATH, FONT_INDEX_MEDIUM, sub_size, max_text_width
         )
         overflow = overflow or sub_overflow
         sub_block_h, sub_line_h, sub_spacing = _text_block_height(sub_font, sub_lines)
@@ -180,7 +180,6 @@ def create_label(text, subtext=None, size=SIZE_NORMAL):
             draw.text(((width - lw) // 2 - bbox[0], y - bbox[1]), line, font=sub_font, fill=0)
             y += sub_line_h + sub_spacing
 
-    img = img.resize((PRINTER_WIDTH, total_height // SUPERSAMPLE), Image.LANCZOS)
     return img, overflow
 
 
@@ -226,13 +225,16 @@ def main():
     subtext = args.subtext.replace('\\n', '\n') if args.subtext else args.subtext
 
     img, overflow = create_label(text, subtext=subtext, size=args.size)
+    preview_img = img.resize(
+        (PRINTER_WIDTH, img.size[1] // SUPERSAMPLE), Image.LANCZOS
+    )
 
     if args.save:
-        img.save(args.save)
+        preview_img.save(args.save)
         print(f"Saved to {args.save}")
 
     if args.preview:
-        img.show()
+        preview_img.show()
         return
 
     if args.save and not args.device:
@@ -249,7 +251,7 @@ def main():
         img.save(tmp_path)
 
     try:
-        img_data = read_img(tmp_path, PRINTER_WIDTH, 'none')
+        img_data = read_img(tmp_path, PRINTER_WIDTH, 'floyd-steinberg')
         commands = cmds_print_img(img_data, energy=0xffff)
         asyncio.run(run_ble(commands, args.device))
     finally:
