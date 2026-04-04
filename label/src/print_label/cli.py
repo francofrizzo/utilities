@@ -2,12 +2,14 @@
 Thermal printer label maker.
 Usage: print-label [OPTIONS] TEXT
 
-Font size is specified in units of 12pt (default: 6 = 72pt).
+Font size is specified in units of 12pt (default: 4 = 48pt).
 
 Examples:
   print-label "PANKO"
-  print-label --small "Ingredient"
-  print-label --large "WARNING"
+  print-label --xs "Tiny text"
+  print-label --sm "Ingredient"
+  print-label --lg "WARNING"
+  print-label --xl "BIG"
   print-label --size 5 "Custom size"
   print-label "Main Label" --subtext "Subtitle here"
   print-label "Line 1\\nLine 2"
@@ -53,14 +55,15 @@ def find_font():
 FONT_PATH, FONT_INDEX_MEDIUM, FONT_INDEX_REGULAR = find_font()
 
 SCALE_UNIT = 12  # 1 size unit = 12pt
-SIZE_SMALL = 4
-SIZE_NORMAL = 6
-SIZE_LARGE = 8
+SIZE_XS = 2
+SIZE_SM = 3
+SIZE_MD = 4
+SIZE_LG = 6
+SIZE_XL = 8
 SUBTEXT_RATIO = 0.75
 
 PADDING = 20
 SUPERSAMPLE = 4
-MIN_FONT_SCALE = 0.75
 
 
 # ========== Image Generation ==========
@@ -96,26 +99,13 @@ def _fit_single_line(text, font, max_width):
 
 
 def _fit_text(text, font_path, font_index, font_size, max_width):
-    """Fit text within max_width: shrink font up to MIN_FONT_SCALE, then word-wrap.
+    """Fit text within max_width using word-wrap.
 
     Supports explicit line breaks via \\n in the input text.
     """
-    # Split on explicit line breaks
     segments = text.split('\n')
-
     font = ImageFont.truetype(font_path, size=font_size, index=font_index)
 
-    # Find the widest segment to determine shrink factor
-    widest = max(
-        font.getbbox(seg)[2] - font.getbbox(seg)[0] for seg in segments
-    )
-
-    if widest > max_width:
-        scale = max(MIN_FONT_SCALE, max_width / widest)
-        shrunk_size = int(font_size * scale)
-        font = ImageFont.truetype(font_path, size=shrunk_size, index=font_index)
-
-    # Word-wrap each segment independently
     all_lines = []
     overflow = False
     for seg in segments:
@@ -134,7 +124,7 @@ def _text_block_height(font, lines):
     return line_h * len(lines) + spacing * max(0, len(lines) - 1), line_h, spacing
 
 
-def create_label(text, subtext=None, size=SIZE_NORMAL):
+def create_label(text, subtext=None, size=SIZE_MD):
     """Create a label image with text and optional subtext.
 
     Args:
@@ -188,11 +178,13 @@ def create_label(text, subtext=None, size=SIZE_NORMAL):
 def main():
     parser = argparse.ArgumentParser(
         description="Print labels on thermal printer",
-        epilog="Size is in units of 12pt (default: 6 = 72pt)\n\n"
+        epilog="Size is in units of 12pt (default: 4 = 48pt)\n\n"
                "Examples:\n"
                "  print-label \"PANKO\"\n"
-               "  print-label --small \"Ingredient\"\n"
-               "  print-label --large \"WARNING\"\n"
+               "  print-label --xs \"Tiny text\"\n"
+               "  print-label --sm \"Ingredient\"\n"
+               "  print-label --lg \"WARNING\"\n"
+               "  print-label --xl \"BIG\"\n"
                "  print-label --size 5 \"Custom size\"\n"
                "  print-label \"Main Label\" --subtext \"Subtitle here\"\n"
                "  print-label \"Line 1\\\\nLine 2\"",
@@ -203,12 +195,18 @@ def main():
     parser.add_argument("--subtext", "-s", help="Smaller subtitle text below main text")
 
     size_group = parser.add_mutually_exclusive_group()
-    size_group.add_argument("--small", action="store_const", const=SIZE_SMALL, dest="size",
-                           help=f"Use small font (size {SIZE_SMALL})")
-    size_group.add_argument("--large", action="store_const", const=SIZE_LARGE, dest="size",
-                           help=f"Use large font (size {SIZE_LARGE})")
+    size_group.add_argument("--extra-small", "--xs", action="store_const", const=SIZE_XS, dest="size",
+                           help=f"Use extra-small font (size {SIZE_XS})")
+    size_group.add_argument("--small", "--sm", action="store_const", const=SIZE_SM, dest="size",
+                           help=f"Use small font (size {SIZE_SM})")
+    size_group.add_argument("--medium", "--md", action="store_const", const=SIZE_MD, dest="size",
+                           help=f"Use medium font (size {SIZE_MD}, default)")
+    size_group.add_argument("--large", "--lg", action="store_const", const=SIZE_LG, dest="size",
+                           help=f"Use large font (size {SIZE_LG})")
+    size_group.add_argument("--extra-large", "--xl", action="store_const", const=SIZE_XL, dest="size",
+                           help=f"Use extra-large font (size {SIZE_XL})")
     size_group.add_argument("--size", type=float, dest="size", metavar="N",
-                           help=f"Custom size in units of {SCALE_UNIT}pt (default: {SIZE_NORMAL})")
+                           help=f"Custom size in units of {SCALE_UNIT}pt (default: {SIZE_MD})")
 
     parser.add_argument("--preview", "-p", action="store_true",
                        help="Show preview instead of printing")
@@ -219,7 +217,7 @@ def main():
     args = parser.parse_args()
 
     if args.size is None:
-        args.size = SIZE_NORMAL
+        args.size = SIZE_MD
 
     text = args.text.replace('\\n', '\n')
     subtext = args.subtext.replace('\\n', '\n') if args.subtext else args.subtext
