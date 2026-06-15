@@ -15,12 +15,16 @@ A collection of personal command-line utilities.
 ./install.sh   # symlink bin/* into ~/.bin (backs up any existing files)
 ```
 
-The scripts below use the OpenAI API — they need their Python deps and an API
-key in the macOS keychain:
+### `cleanup-disk.sh`
+
+Reclaim disk space from the usual self-regrowing offenders (Go/Docker/brew/npm
+caches, Playwright, Time Machine local snapshots). Safe by default — only
+removes things that regenerate.
 
 ```bash
-pip install -r bin/requirements.txt      # openai, keyring (a venv is fine)
-python3 -c 'import keyring; keyring.set_password("openai", "api_key", "sk-...")'
+cleanup-disk.sh --dry-run     # show what would happen, change nothing
+cleanup-disk.sh --snapshots   # also thin TM local snapshots (needs sudo)
+cleanup-disk.sh --aggressive  # also prune Docker volumes + deeper caches
 ```
 
 ### `emoji`
@@ -38,6 +42,14 @@ Transcribe an audio file with Whisper.
 ```bash
 transcribe meeting.m4a
 ```
+
+> `emoji` and `transcribe` use the OpenAI API — they need their Python deps and
+> an API key in the macOS keychain:
+>
+> ```bash
+> pip install -r bin/requirements.txt      # openai, keyring (a venv is fine)
+> python3 -c 'import keyring; keyring.set_password("openai", "api_key", "sk-...")'
+> ```
 
 ## Tools
 
